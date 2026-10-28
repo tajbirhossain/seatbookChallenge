@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import HoldCountdown from '../components/HoldCountdown';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 export default function EventDetailPage() {
   const { id } = useParams();
@@ -9,9 +12,15 @@ export default function EventDetailPage() {
   const [selectedSeat, setSelectedSeat] = useState<any>(null);
   const [availableCount, setAvailableCount] = useState(0);
   const [toast, setToast] = useState<{ type: string; message: string } | null>(null);
+  const [holds, setHolds] = useState<any[]>([]);
+
+  const showToast = (type: string, message: string) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const fetchEvent = () => {
-    fetch(`http://localhost:4000/events/${id}`)
+    fetch(`${API_URL}/events/${id}`)
       .then((res) => res.json())
       .then((data) => {
         setEvent(data);
@@ -31,8 +40,23 @@ export default function EventDetailPage() {
       });
   };
 
+  // The logged-in user's active holds on this event.
+  const fetchHolds = () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setHolds([]);
+      return;
+    }
+
+    fetch(`${API_URL}/bookings/holds`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setHolds(data.filter((h: any) => h.event.id === Number(id))))
+      .catch(() => setHolds([]));
+  };
+
   useEffect(() => {
     fetchEvent();
+    fetchHolds();
   }, [id]);
 
   const handleBook = async () => {
@@ -48,7 +72,7 @@ export default function EventDetailPage() {
       return;
     }
 
-    const res = await fetch('http://localhost:4000/bookings', {
+    const res = await fetch(`${API_URL}/bookings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ seatId: selectedSeat.id }),
@@ -66,6 +90,57 @@ export default function EventDetailPage() {
     }
   };
 
+  const handleHold = async () => {
+    if (!selectedSeat) {
+      showToast('error', 'Please select a seat first! 🪑');
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+
+    const res = await fetch(`${API_URL}/bookings/hold`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ seatId: selectedSeat.id }),
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      showToast('success', `⏳ Seat ${selectedSeat.label} is held for 10 minutes`);
+      setSelectedSeat(null);
+    } else {
+      showToast('error', '😢 ' + (data.error || data.msg));
+    }
+    fetchEvent();
+    fetchHolds();
+  };
+
+  const handleConfirmHold = async (hold: any) => {
+    const res = await fetch(`${API_URL}/bookings/${hold.id}/confirm`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      showToast('success', `🎉 Woohoo! Seat ${hold.seat} is yours!`);
+    } else {
+      showToast('error', '😢 ' + (data.error || data.msg));
+    }
+    fetchEvent();
+    fetchHolds();
+  };
+
+  const handleHoldExpired = (hold: any) => {
+    setHolds((current) => current.filter((h) => h.id !== hold.id));
+    showToast('error', `⌛ Your hold on seat ${hold.seat} expired`);
+    fetchEvent();
+  };
+
   if (!event) {
     return (
       <div className="flex flex-col items-center justify-center py-32">
@@ -80,6 +155,7 @@ export default function EventDetailPage() {
   const total = price + serviceFee;
   const isPast = new Date(event.startsAt) < new Date();
   const percentBooked = Math.round(((event.seats.length - availableCount) / event.seats.length) * 100);
+  const heldLabels = new Set(holds.map((h) => h.seat));
 
   return (
     <div>
@@ -123,10 +199,14 @@ export default function EventDetailPage() {
                 {row.map((seat: any) => (
                   <div
                     key={seat.id}
-                    onClick={() => setSelectedSeat(seat)}
+                    onClick={() => {
+                      if (!heldLabels.has(seat.label)) setSelectedSeat(seat);
+                    }}
                     className={`w-12 h-12 rounded-xl flex items-center justify-center text-xs font-bold cursor-pointer transition-all duration-300 hover:scale-110 ${
                       selectedSeat?.id === seat.id
                         ? 'bg-gradient-to-br from-[#ec4899] to-[#f97316] shadow-lg shadow-pink-500/50 scale-110'
+                        : heldLabels.has(seat.label)
+                        ? 'bg-gradient-to-br from-[#f59e0b] to-[#d97706] shadow-lg shadow-amber-500/40'
                         : seat.available
                         ? 'bg-gradient-to-br from-[#a855f7]/60 to-[#6366f1]/60 hover:from-[#a855f7] hover:to-[#6366f1]'
                         : 'bg-gradient-to-br from-[#a855f7]/20 to-[#6366f1]/20 text-white/30'
@@ -138,35 +218,70 @@ export default function EventDetailPage() {
               </div>
             ))}
           </div>
+          {holds.length > 0 && (
+            <p className="mt-8 text-center text-xs text-white/50">
+              <span className="inline-block w-3 h-3 rounded bg-[#f59e0b] align-middle mr-2"></span>
+              Seats you are holding
+            </p>
+          )}
         </div>
 
-        <div className="glass rounded-3xl p-8 h-fit">
-          <h3 className="text-xl font-bold mb-6">Order Summary 🧾</h3>
-          <div className="space-y-4 text-white/70">
-            <div className="flex justify-between">
-              <span>Seat</span>
-              <span className="font-bold text-white">{selectedSeat ? selectedSeat.label : '—'}</span>
+        <div className="space-y-6">
+          <div className="glass rounded-3xl p-8 h-fit">
+            <h3 className="text-xl font-bold mb-6">Order Summary 🧾</h3>
+            <div className="space-y-4 text-white/70">
+              <div className="flex justify-between">
+                <span>Seat</span>
+                <span className="font-bold text-white">{selectedSeat ? selectedSeat.label : '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Ticket</span>
+                <span>${price.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Service fee (5%)</span>
+                <span>${serviceFee.toFixed(2)}</span>
+              </div>
+              <div className="border-t border-white/10 pt-4 flex justify-between text-xl font-bold text-white">
+                <span>Total</span>
+                <span className="gradient-text">${total.toFixed(2)}</span>
+              </div>
             </div>
-            <div className="flex justify-between">
-              <span>Ticket</span>
-              <span>${price.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Service fee (5%)</span>
-              <span>${serviceFee.toFixed(2)}</span>
-            </div>
-            <div className="border-t border-white/10 pt-4 flex justify-between text-xl font-bold text-white">
-              <span>Total</span>
-              <span className="gradient-text">${total.toFixed(2)}</span>
-            </div>
+            <button
+              onClick={handleBook}
+              className="mt-8 w-full py-4 rounded-2xl bg-gradient-to-r from-[#a855f7] via-[#ec4899] to-[#f97316] font-bold text-lg hover:scale-[1.02] hover:shadow-2xl hover:shadow-pink-500/40 transition-all duration-300"
+            >
+              Book Now 🎟️
+            </button>
+            <button
+              onClick={handleHold}
+              className="mt-3 w-full py-3 rounded-2xl border border-[#f59e0b]/60 text-[#fcd34d] font-semibold hover:bg-[#f59e0b]/10 transition-all duration-300"
+            >
+              Hold for 10 minutes ⏳
+            </button>
+            <p className="mt-4 text-center text-xs text-white/40">🔒 Secure checkout · Instant confirmation</p>
           </div>
-          <button
-            onClick={handleBook}
-            className="mt-8 w-full py-4 rounded-2xl bg-gradient-to-r from-[#a855f7] via-[#ec4899] to-[#f97316] font-bold text-lg hover:scale-[1.02] hover:shadow-2xl hover:shadow-pink-500/40 transition-all duration-300"
-          >
-            Book Now 🎟️
-          </button>
-          <p className="mt-4 text-center text-xs text-white/40">🔒 Secure checkout · Instant confirmation</p>
+
+          {holds.length > 0 && (
+            <div className="glass rounded-3xl p-8 h-fit">
+              <h3 className="text-xl font-bold mb-2">Your Holds ⏳</h3>
+              <p className="text-white/50 text-sm mb-4">Confirm before the timer runs out or the seat is released.</p>
+              <div className="space-y-3">
+                {holds.map((hold) => (
+                  <div key={hold.id} className="flex items-center justify-between gap-3">
+                    <span className="px-3 py-1 rounded-full bg-[#f59e0b]/20 text-[#fcd34d] text-sm">💺 {hold.seat}</span>
+                    <HoldCountdown expiresAt={hold.expiresAt} onExpire={() => handleHoldExpired(hold)} />
+                    <button
+                      onClick={() => handleConfirmHold(hold)}
+                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-sm font-semibold hover:scale-105 transition-all duration-300"
+                    >
+                      Confirm
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

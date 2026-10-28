@@ -16,6 +16,8 @@ enum Role {
 enum BookingStatus {
   CONFIRMED
   CANCELLED
+  HELD
+  EXPIRED
 }
 
 model User {
@@ -65,4 +67,8 @@ model Booking {
   status      BookingStatus @default(CONFIRMED)
   createdAt   DateTime      @default(now())
   cancelledAt DateTime?
+  // Set while status is HELD: the hold is released once this time passes.
+  expiresAt   DateTime?
+
+  @@index([status, expiresAt])
 }

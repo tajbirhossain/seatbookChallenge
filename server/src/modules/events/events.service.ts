@@ -1,10 +1,11 @@
 import prisma from '../../lib/prisma';
 import { formatPrice, isSeatBookable, seatLabel } from '../../utils/helpers';
+import { activeBookingWhere } from '../bookings/bookings.rules';
 
 export async function listEvents() {
   const events = await prisma.event.findMany({
     orderBy: { startsAt: 'asc' },
-    include: { seats: { include: { bookings: true } } },
+    include: { seats: { include: { bookings: { where: activeBookingWhere(new Date()) } } } },
   });
 
   return events.map((event) => {
@@ -29,7 +30,7 @@ export async function getEventWithSeats(id: number) {
       organizer: { select: { id: true, name: true } },
       seats: {
         orderBy: [{ row: 'asc' }, { col: 'asc' }],
-        include: { bookings: { where: { status: 'CONFIRMED' } } },
+        include: { bookings: { where: activeBookingWhere(new Date()) } },
       },
     },
   });

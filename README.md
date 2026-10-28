@@ -58,7 +58,12 @@ You need a Postgres running at the `DATABASE_URL` in `server/.env`.
 | GET | `/events/:id` | none | One event with its seat map |
 | POST | `/events` | organizer | Create an event and its seats |
 | POST | `/bookings` | attendee | Book a seat |
+| POST | `/bookings/hold` | attendee | Hold a seat for 10 minutes |
+| POST | `/bookings/:id/confirm` | attendee | Turn your unexpired hold into a booking |
+| GET | `/bookings/holds` | attendee | Your active holds |
 | GET | `/bookings/mine` | attendee | Your bookings |
 | POST | `/bookings/:id/cancel` | attendee | Cancel a booking |
+
+A held seat shows as unavailable to everyone else until the hold is confirmed or its 10 minutes run out. `POST /bookings` still books a seat directly, and confirms your own hold on that seat if you have one.
 
 Send the token as `Authorization: Bearer <token>`.
