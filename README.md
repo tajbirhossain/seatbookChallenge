@@ -61,6 +61,7 @@ You need a Postgres running at the `DATABASE_URL` in `server/.env`.
 | POST | `/bookings/hold` | attendee | Hold a seat for 10 minutes |
 | POST | `/bookings/:id/confirm` | attendee | Turn your unexpired hold into a booking |
 | GET | `/bookings/holds` | attendee | Your active holds |
+| GET | `/bookings/blocked-seats` | attendee | Seats you can no longer take because your hold on them expired (`?eventId=` to filter) |
 | GET | `/bookings/mine` | attendee | Your bookings |
 | POST | `/bookings/:id/cancel` | attendee | Cancel a booking |
 

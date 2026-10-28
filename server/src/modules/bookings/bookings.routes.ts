@@ -8,6 +8,7 @@ router.post('/', requireAuth, controller.create);
 router.post('/hold', requireAuth, controller.hold);
 router.get('/mine', requireAuth, controller.listMine);
 router.get('/holds', requireAuth, controller.listHolds);
+router.get('/blocked-seats', requireAuth, controller.listBlockedSeats);
 router.post('/:id/confirm', requireAuth, controller.confirm);
 router.post('/:id/cancel', requireAuth, controller.cancel);
 

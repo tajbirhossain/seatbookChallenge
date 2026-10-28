@@ -6,6 +6,7 @@ import {
   confirmHold,
   createBooking,
   holdSeat,
+  listBlockedSeats,
   releaseExpiredHolds,
 } from '../src/modules/bookings/bookings.service';
 import { backdateHold, createFixtures } from './support/fixtures';
@@ -109,6 +110,33 @@ describe.skipIf(!process.env.DATABASE_URL)('seat unavailable after your own hold
 
     expect(await holdSeat(user, a)).toHaveProperty('booking');
     expect(await createBooking(user, b)).toHaveProperty('booking');
+  });
+
+  it('lists the seats blocked for the user, per event, and nobody else', async () => {
+    const user = await makeUser();
+    const other = await makeUser();
+    const [lapsedSeat, sweptSeat, activeSeat] = await makeSeats(3);
+    const [elsewhere] = await makeSeats(1);
+
+    // Holds are taken one after another because a user can hold only two seats at a time.
+    await holdSeat(user, sweptSeat);
+    await backdateHold(user, sweptSeat);
+    await releaseExpiredHolds(); // sweptSeat is now EXPIRED
+
+    await holdSeat(user, lapsedSeat);
+    await backdateHold(user, lapsedSeat); // lapsed but not swept yet
+
+    await holdSeat(user, activeSeat); // still active, so not blocked
+    await holdSeat(user, elsewhere);
+    await backdateHold(user, elsewhere);
+
+    const { eventId } = await prisma.seat.findUniqueOrThrow({ where: { id: lapsedSeat } });
+    const blockedIds = (await listBlockedSeats(user)).map((b) => b.seatId).sort();
+
+    expect(blockedIds).toEqual([lapsedSeat, sweptSeat, elsewhere].sort());
+    expect(blockedIds).not.toContain(activeSeat);
+    expect(await listBlockedSeats(user, eventId)).toHaveLength(2);
+    expect(await listBlockedSeats(other)).toEqual([]);
   });
 
   it('keeps other users out while the hold is active, and the holder can still confirm', async () => {

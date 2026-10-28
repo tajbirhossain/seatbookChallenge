@@ -180,6 +180,22 @@ export async function listUserHolds(userId: number) {
   return holds.map(toBookingView);
 }
 
+// Seats the user can no longer take because their own hold on them ran out
+// (see the lapsed-hold check in reserveSeat). Optionally limited to one event.
+export async function listBlockedSeats(userId: number, eventId?: number) {
+  const lapsed = await prisma.booking.findMany({
+    where: {
+      userId,
+      OR: [{ status: 'EXPIRED' }, { status: 'HELD', expiresAt: { lte: new Date() } }],
+      ...(eventId !== undefined ? { seat: { eventId } } : {}),
+    },
+    distinct: ['seatId'],
+    include: { seat: true },
+  });
+
+  return lapsed.map((b) => ({ seatId: b.seatId, label: b.seat.label, eventId: b.seat.eventId }));
+}
+
 export async function cancelBooking(id: number) {
   await prisma.booking.updateMany({
     where: { id, status: 'CONFIRMED' },

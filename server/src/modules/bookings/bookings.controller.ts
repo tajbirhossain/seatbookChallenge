@@ -94,6 +94,19 @@ export async function listHolds(req: AuthRequest, res: Response) {
   }
 }
 
+export async function listBlockedSeats(req: AuthRequest, res: Response) {
+  try {
+    const eventId = req.query.eventId === undefined ? undefined : Number(req.query.eventId);
+    if (eventId !== undefined && !Number.isInteger(eventId)) {
+      return res.status(400).json({ error: 'eventId must be a number' });
+    }
+
+    res.json(await bookingService.listBlockedSeats(req.user!.id, eventId));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
 export async function cancel(req: AuthRequest, res: Response) {
   await bookingService.cancelBooking(parseInt(req.params.id));
 
