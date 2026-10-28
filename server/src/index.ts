@@ -1,8 +1,9 @@
 import express from 'express';
 import cors from 'cors';
-import authRoutes from './routes/auth';
-import eventRoutes from './routes/events';
-import bookingRoutes from './routes/bookings';
+import authRoutes from './modules/auth/auth.routes';
+import eventRoutes from './modules/events/events.routes';
+import bookingRoutes from './modules/bookings/bookings.routes';
+import { PORT } from './config/env';
 
 const app = express();
 
@@ -16,8 +17,6 @@ app.get('/health', (req, res) => {
 app.use('/auth', authRoutes);
 app.use('/events', eventRoutes);
 app.use('/bookings', bookingRoutes);
-
-const PORT = process.env.PORT || 4000;
 
 app.listen(PORT, () => {
   console.log(`Seatbook API running on http://localhost:${PORT}`);

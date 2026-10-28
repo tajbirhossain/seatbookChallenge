@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'seatbook-secret-123';
+import { JWT_SECRET } from '../config/env';
 
 export interface AuthUser {
   id: number;
