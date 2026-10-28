@@ -3,7 +3,6 @@ import cors from 'cors';
 import authRoutes from './modules/auth/auth.routes';
 import eventRoutes from './modules/events/events.routes';
 import bookingRoutes from './modules/bookings/bookings.routes';
-import { PORT } from './config/env';
 
 const app = express();
 
@@ -18,6 +17,4 @@ app.use('/auth', authRoutes);
 app.use('/events', eventRoutes);
 app.use('/bookings', bookingRoutes);
 
-app.listen(PORT, () => {
-  console.log(`Seatbook API running on http://localhost:${PORT}`);
-});
+export default app;
