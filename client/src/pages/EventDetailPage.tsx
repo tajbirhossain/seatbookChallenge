@@ -13,6 +13,8 @@ export default function EventDetailPage() {
   const [availableCount, setAvailableCount] = useState(0);
   const [toast, setToast] = useState<{ type: string; message: string } | null>(null);
   const [holds, setHolds] = useState<any[]>([]);
+  // Labels of seats the user can't take any more because their own hold on them expired.
+  const [blockedLabels, setBlockedLabels] = useState<string[]>([]);
 
   const showToast = (type: string, message: string) => {
     setToast({ type, message });
@@ -31,6 +33,11 @@ export default function EventDetailPage() {
           grouped[seat.row].push(seat);
         });
         setRows(grouped);
+
+        // Drop the selection if someone else took that seat in the meantime.
+        setSelectedSeat((current: any) =>
+          current && data.seats.some((s: any) => s.id === current.id && s.available) ? current : null
+        );
 
         let count = 0;
         data.seats.forEach((seat: any) => {
@@ -54,9 +61,23 @@ export default function EventDetailPage() {
       .catch(() => setHolds([]));
   };
 
+  const fetchBlockedSeats = () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setBlockedLabels([]);
+      return;
+    }
+
+    fetch(`${API_URL}/bookings/blocked-seats?eventId=${id}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setBlockedLabels(data.map((s: any) => s.label)))
+      .catch(() => setBlockedLabels([]));
+  };
+
   useEffect(() => {
     fetchEvent();
     fetchHolds();
+    fetchBlockedSeats();
   }, [id]);
 
   const handleBook = async () => {
@@ -137,8 +158,11 @@ export default function EventDetailPage() {
 
   const handleHoldExpired = (hold: any) => {
     setHolds((current) => current.filter((h) => h.id !== hold.id));
+    // Block the seat right away; the server list below confirms it.
+    setBlockedLabels((current) => (current.includes(hold.seat) ? current : [...current, hold.seat]));
     showToast('error', `⌛ Your hold on seat ${hold.seat} expired`);
     fetchEvent();
+    fetchBlockedSeats();
   };
 
   if (!event) {
@@ -156,6 +180,7 @@ export default function EventDetailPage() {
   const isPast = new Date(event.startsAt) < new Date();
   const percentBooked = Math.round(((event.seats.length - availableCount) / event.seats.length) * 100);
   const heldLabels = new Set(holds.map((h) => h.seat));
+  const blockedSet = new Set(blockedLabels);
 
   return (
     <div>
@@ -196,30 +221,54 @@ export default function EventDetailPage() {
           <div className="space-y-3">
             {rows.map((row, i) => (
               <div key={i} className="flex gap-3 justify-center">
-                {row.map((seat: any) => (
-                  <div
-                    key={seat.id}
-                    onClick={() => {
-                      if (!heldLabels.has(seat.label)) setSelectedSeat(seat);
-                    }}
-                    className={`w-12 h-12 rounded-xl flex items-center justify-center text-xs font-bold cursor-pointer transition-all duration-300 hover:scale-110 ${
-                      selectedSeat?.id === seat.id
-                        ? 'bg-gradient-to-br from-[#ec4899] to-[#f97316] shadow-lg shadow-pink-500/50 scale-110'
-                        : heldLabels.has(seat.label)
-                        ? 'bg-gradient-to-br from-[#f59e0b] to-[#d97706] shadow-lg shadow-amber-500/40'
-                        : seat.available
-                        ? 'bg-gradient-to-br from-[#a855f7]/60 to-[#6366f1]/60 hover:from-[#a855f7] hover:to-[#6366f1]'
-                        : 'bg-gradient-to-br from-[#a855f7]/20 to-[#6366f1]/20 text-white/30'
-                    }`}
-                  >
-                    {seat.label}
-                  </div>
-                ))}
+                {row.map((seat: any) => {
+                  const isBlocked = blockedSet.has(seat.label);
+                  // Booked or held seats (including your own holds) report available = false.
+                  const isSelectable = seat.available && !isBlocked;
+
+                  return (
+                    <div
+                      key={seat.id}
+                      onClick={() => {
+                        if (isSelectable) setSelectedSeat(seat);
+                      }}
+                      title={
+                        isBlocked
+                          ? 'Your hold on this seat expired, so it is no longer available to you'
+                          : !seat.available && !heldLabels.has(seat.label)
+                          ? 'This seat is not available'
+                          : undefined
+                      }
+                      aria-disabled={!isSelectable}
+                      className={`w-12 h-12 rounded-xl flex items-center justify-center text-xs font-bold transition-all duration-300 ${
+                        isSelectable ? 'cursor-pointer hover:scale-110' : 'cursor-not-allowed'
+                      } ${
+                        isBlocked
+                          ? 'border border-dashed border-white/25 bg-white/5 text-white/25 line-through'
+                          : heldLabels.has(seat.label)
+                          ? 'bg-gradient-to-br from-[#f59e0b] to-[#d97706] shadow-lg shadow-amber-500/40'
+                          : !seat.available
+                          ? 'bg-gradient-to-br from-[#a855f7]/20 to-[#6366f1]/20 text-white/30'
+                          : selectedSeat?.id === seat.id
+                          ? 'bg-gradient-to-br from-[#ec4899] to-[#f97316] shadow-lg shadow-pink-500/50 scale-110'
+                          : 'bg-gradient-to-br from-[#a855f7]/60 to-[#6366f1]/60 hover:from-[#a855f7] hover:to-[#6366f1]'
+                      }`}
+                    >
+                      {seat.label}
+                    </div>
+                  );
+                })}
               </div>
             ))}
           </div>
-          {holds.length > 0 && (
+          {blockedLabels.length > 0 && (
             <p className="mt-8 text-center text-xs text-white/50">
+              <span className="inline-block w-3 h-3 rounded border border-dashed border-white/40 align-middle mr-2"></span>
+              Seats no longer available to you (your hold expired)
+            </p>
+          )}
+          {holds.length > 0 && (
+            <p className="mt-4 text-center text-xs text-white/50">
               <span className="inline-block w-3 h-3 rounded bg-[#f59e0b] align-middle mr-2"></span>
               Seats you are holding
             </p>
