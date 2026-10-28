@@ -22,6 +22,9 @@ function sendReserveResult(res: Response, result: ReserveSeatResult) {
     case 'SEAT_HELD':
       res.status(409).json({ error: 'Seat is currently on hold' });
       break;
+    case 'SEAT_HOLD_EXPIRED':
+      res.status(403).json({ error: 'Your hold on this seat expired, so it is no longer available to you' });
+      break;
     case 'HOLD_LIMIT_REACHED':
       res.status(409).json({ error: `You can hold at most ${MAX_ACTIVE_HOLDS} seats at a time` });
       break;

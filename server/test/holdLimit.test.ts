@@ -3,55 +3,17 @@ import { afterAll, describe, expect, it } from 'vitest';
 import prisma from '../src/lib/prisma';
 import { confirmHold, createBooking, holdSeat } from '../src/modules/bookings/bookings.service';
 import { MAX_ACTIVE_HOLDS } from '../src/modules/bookings/bookings.rules';
-import { seatLabel } from '../src/utils/helpers';
+import { createFixtures } from './support/fixtures';
 
 // These tests use the real database (not mocks) because the guarantee being tested
 // is a database-level one. They create their own users and events and remove them after.
 describe.skipIf(!process.env.DATABASE_URL)('seat hold limit', () => {
-  const runId = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-  const userIds: number[] = [];
-  const eventIds: number[] = [];
-  let counter = 0;
-
-  async function makeUser() {
-    const user = await prisma.user.create({
-      data: { email: `holdlimit-${runId}-${counter++}@test.local`, name: 'Hold Limit', passwordHash: 'x' },
-    });
-    userIds.push(user.id);
-    return user.id;
-  }
-
-  // Returns the ids of `count` fresh seats on a new future event.
-  async function makeSeats(count: number) {
-    const organizerId = userIds[0] ?? (await makeUser());
-    const seats = Array.from({ length: count }, (_, c) => ({ row: 0, col: c, label: seatLabel(0, c) }));
-    const event = await prisma.event.create({
-      data: {
-        title: `Hold limit ${runId}`,
-        description: '',
-        venue: 'test',
-        startsAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-        rows: 1,
-        cols: count,
-        priceCents: 0,
-        organizerId,
-        seats: { create: seats },
-      },
-      include: { seats: true },
-    });
-    eventIds.push(event.id);
-    return event.seats.map((s) => s.id);
-  }
+  const { makeUser, makeSeats, cleanup } = createFixtures('holdlimit');
 
   const activeHolds = (userId: number) =>
     prisma.booking.count({ where: { userId, status: 'HELD', expiresAt: { gt: new Date() } } });
 
-  afterAll(async () => {
-    await prisma.booking.deleteMany({ where: { userId: { in: userIds } } });
-    await prisma.event.deleteMany({ where: { id: { in: eventIds } } });
-    await prisma.user.deleteMany({ where: { id: { in: userIds } } });
-    await prisma.$disconnect();
-  });
+  afterAll(cleanup);
 
   it('allows up to the limit and rejects the next hold', async () => {
     const user = await makeUser();

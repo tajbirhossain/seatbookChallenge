@@ -7,7 +7,7 @@ type Booking = Awaited<ReturnType<typeof prisma.booking.create>>;
 
 export type ReserveSeatResult =
   | { booking: Booking }
-  | { error: 'SEAT_NOT_FOUND' | 'EVENT_STARTED' | 'SEAT_TAKEN' | 'SEAT_HELD' | 'HOLD_LIMIT_REACHED' };
+  | { error: 'SEAT_NOT_FOUND' | 'EVENT_STARTED' | 'SEAT_TAKEN' | 'SEAT_HELD' | 'HOLD_LIMIT_REACHED' | 'SEAT_HOLD_EXPIRED' };
 
 export type ConfirmHoldResult =
   | { booking: Booking }
@@ -70,6 +70,15 @@ async function reserveSeat(userId: number, seatId: number, status: 'CONFIRMED' |
           return { booking: current };
         }
         return { error: current.status === 'HELD' ? 'SEAT_HELD' : 'SEAT_TAKEN' };
+      }
+
+      // A user whose own hold on this seat ran out cannot take the seat again. Holds that
+      // lapsed but were not swept yet were marked EXPIRED above, so they count too.
+      const lapsedHold = await tx.booking.findFirst({
+        where: { seatId: seat.id, userId, status: 'EXPIRED' },
+      });
+      if (lapsedHold) {
+        return { error: 'SEAT_HOLD_EXPIRED' };
       }
 
       if (status === 'HELD') {
