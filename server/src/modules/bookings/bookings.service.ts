@@ -1,13 +1,13 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../../lib/prisma';
 import { formatPrice } from '../../utils/helpers';
-import { HOLD_DURATION_MS } from './bookings.rules';
+import { HOLD_DURATION_MS, MAX_ACTIVE_HOLDS } from './bookings.rules';
 
 type Booking = Awaited<ReturnType<typeof prisma.booking.create>>;
 
 export type ReserveSeatResult =
   | { booking: Booking }
-  | { error: 'SEAT_NOT_FOUND' | 'EVENT_STARTED' | 'SEAT_TAKEN' | 'SEAT_HELD' };
+  | { error: 'SEAT_NOT_FOUND' | 'EVENT_STARTED' | 'SEAT_TAKEN' | 'SEAT_HELD' | 'HOLD_LIMIT_REACHED' };
 
 export type ConfirmHoldResult =
   | { booking: Booking }
@@ -39,6 +39,12 @@ async function reserveSeat(userId: number, seatId: number, status: 'CONFIRMED' |
 
   try {
     return await prisma.$transaction(async (tx): Promise<ReserveSeatResult> => {
+      if (status === 'HELD') {
+        // Take the user's row lock so their concurrent hold requests run one at a time;
+        // otherwise each could count fewer than MAX_ACTIVE_HOLDS holds and all insert.
+        await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
+      }
+
       const now = new Date();
 
       // Free the seat if an earlier hold on it has run out.
@@ -64,6 +70,15 @@ async function reserveSeat(userId: number, seatId: number, status: 'CONFIRMED' |
           return { booking: current };
         }
         return { error: current.status === 'HELD' ? 'SEAT_HELD' : 'SEAT_TAKEN' };
+      }
+
+      if (status === 'HELD') {
+        const activeHolds = await tx.booking.count({
+          where: { userId, status: 'HELD', expiresAt: { gt: now } },
+        });
+        if (activeHolds >= MAX_ACTIVE_HOLDS) {
+          return { error: 'HOLD_LIMIT_REACHED' };
+        }
       }
 
       const booking = await tx.booking.create({

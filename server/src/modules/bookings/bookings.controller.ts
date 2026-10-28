@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../../middleware/auth';
 import * as bookingService from './bookings.service';
 import type { ReserveSeatResult } from './bookings.service';
+import { MAX_ACTIVE_HOLDS } from './bookings.rules';
 
 function sendReserveResult(res: Response, result: ReserveSeatResult) {
   if (!('error' in result)) {
@@ -20,6 +21,9 @@ function sendReserveResult(res: Response, result: ReserveSeatResult) {
       break;
     case 'SEAT_HELD':
       res.status(409).json({ error: 'Seat is currently on hold' });
+      break;
+    case 'HOLD_LIMIT_REACHED':
+      res.status(409).json({ error: `You can hold at most ${MAX_ACTIVE_HOLDS} seats at a time` });
       break;
   }
 }
