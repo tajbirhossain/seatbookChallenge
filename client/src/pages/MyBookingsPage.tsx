@@ -8,6 +8,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 export default function MyBookingsPage() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<{ message: string; expired: boolean } | null>(null);
   const [holds, setHolds] = useState<any[]>([]);
   const [toast, setToast] = useState<{ type: string; message: string } | null>(null);
   // The action waiting for the user to confirm it in the dialog.
@@ -34,9 +35,21 @@ export default function MyBookingsPage() {
     fetch(`${API_URL}/bookings/mine`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     })
-      .then((res) => res.json())
-      .then((data) => {
-        setBookings(data);
+      .then(async (res) => {
+        if (!res.ok) {
+          setLoadError(
+            res.status === 401
+              ? { message: 'Your session has expired. Please log in again.', expired: true }
+              : { message: 'Could not load your bookings. Please try again.', expired: false }
+          );
+        } else {
+          setBookings(await res.json());
+          setLoadError(null);
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoadError({ message: 'Could not reach the server. Check your connection and try again.', expired: false });
         setLoading(false);
       });
   };
@@ -115,6 +128,37 @@ export default function MyBookingsPage() {
       <div className="flex flex-col items-center justify-center py-32">
         <div className="w-16 h-16 border-4 border-[#f97316] border-t-transparent rounded-full animate-spin"></div>
         <p className="mt-6 text-white/60 animate-pulse">Loading your bookings... 🎟️</p>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 text-center">
+        <div className="text-6xl">😕</div>
+        <h1 className="mt-6 text-3xl font-extrabold">Couldn't load your bookings</h1>
+        <p className="mt-3 text-white/60">{loadError.message}</p>
+        <div className="mt-8">
+          {loadError.expired ? (
+            <Link
+              to="/login"
+              className="px-6 py-3 rounded-2xl bg-gradient-to-r from-[#a855f7] via-[#ec4899] to-[#f97316] font-semibold hover:scale-105 transition-all duration-300"
+            >
+              Log in
+            </Link>
+          ) : (
+            <button
+              onClick={() => {
+                setLoadError(null);
+                setLoading(true);
+                loadBookings();
+              }}
+              className="px-6 py-3 rounded-2xl border border-white/20 text-white/80 hover:bg-white/10 transition-all duration-300"
+            >
+              Try again
+            </button>
+          )}
+        </div>
       </div>
     );
   }

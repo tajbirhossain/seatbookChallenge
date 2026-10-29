@@ -1,3 +1,6 @@
+# LOCAL DEVELOPMENT ONLY. The credentials below are public and the seeded accounts have a known
+# password. The API refuses to start with them when NODE_ENV=production.
+# For production use docker-compose.prod.yml, which requires real secrets.
 services:
   db:
     image: postgres:16-alpine
@@ -6,7 +9,10 @@ services:
       POSTGRES_PASSWORD: seatbook
       POSTGRES_DB: seatbook
     ports:
-      - "5433:5432"
+      # Bound to this machine only (IPv4 and IPv6 loopback, since `localhost` can resolve to either),
+      # so nobody else on the network can reach the dev database.
+      - "127.0.0.1:5433:5432"
+      - "[::1]:5433:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
@@ -20,7 +26,7 @@ services:
     environment:
       DATABASE_URL: postgresql://seatbook:seatbook@db:5432/seatbook
       PORT: 4000
-      # Local development only. Set a long random value for anything else, e.g. `openssl rand -hex 32`.
+      # Public development value, used only if you don't set JWT_SECRET yourself.
       JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-me}
     ports:
       - "4000:4000"

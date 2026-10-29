@@ -15,7 +15,9 @@ docker compose up --build
 
 - App: http://localhost:5173
 - API: http://localhost:4000
-- Postgres: `localhost:5433` (user / password / db: `seatbook`)
+- Postgres: `localhost:5433` (user / password / db: `seatbook`), reachable from this machine only
+
+This setup is for local development only: its credentials are public and the seeded accounts have a known password. The server refuses to start with them when `NODE_ENV=production`.
 
 The database is migrated and seeded on first start. To start from a clean database: `docker compose down -v`.
 
@@ -39,6 +41,18 @@ cd client && npm install && npm run dev
 ```
 
 You need a Postgres running at the `DATABASE_URL` in `server/.env`, and a `JWT_SECRET` there too: the server refuses to start without one.
+
+### Production
+
+`docker-compose.prod.yml` runs the database and the API with no default credentials. Compose will not start until you provide both secrets, and the API itself refuses to boot with a weak or placeholder `JWT_SECRET` (under 32 characters, or `change-me`-style) or a default database password. It never seeds the database, and the database port is not published.
+
+```bash
+export POSTGRES_PASSWORD=$(openssl rand -hex 24)   # hex keeps the password safe inside a URL
+export JWT_SECRET=$(openssl rand -hex 32)
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+No `openssl`? Use `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Set `SERVER_PORT` to publish the API on a port other than 4000. The web client is not part of this stack: build it with `npm run build` in `client/` and serve `client/dist` from a static host, with `VITE_API_URL` set to the API's public URL.
 
 ## Scripts
 

@@ -30,7 +30,11 @@ export default function EventsPage() {
 
   useEffect(() => {
     fetch(`${API_URL}/events`)
-      .then((res) => res.json())
+      .then((res) => {
+        // An error response is a JSON object, not a list; treat it like any other failed load.
+        if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         setEvents(data);
         setFiltered(data);

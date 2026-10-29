@@ -22,6 +22,12 @@ function daysFromNow(days: number) {
 }
 
 async function main() {
+  // The seed creates accounts with a publicly known password, so it must never run in production.
+  if (process.env.NODE_ENV === 'production') {
+    console.error('Refusing to seed in production: the seed accounts use a publicly known password.');
+    process.exit(1);
+  }
+
   const existing = await prisma.user.count();
   if (existing > 0) {
     console.log('Database already seeded, skipping');

@@ -1,0 +1,54 @@
+# Production stack: database + API.
+#
+# Unlike docker-compose.yml (local development only), this file contains no default credentials.
+# Compose refuses to start until every secret below is provided, and the API itself refuses to
+# boot with a weak or placeholder JWT_SECRET or a default database password.
+#
+#   export POSTGRES_PASSWORD=$(openssl rand -hex 24)   # hex keeps the password safe inside a URL
+#   export JWT_SECRET=$(openssl rand -hex 32)
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# No openssl? node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+#
+# The web client is not part of this stack. Build it with `npm run build` in client/ and serve
+# client/dist from any static host, with VITE_API_URL set to this API's public URL at build time.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: seatbook
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (see the top of this file)}
+      POSTGRES_DB: seatbook
+    # No published port: only the API container can reach the database.
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seatbook"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  server:
+    build: ./server
+    restart: unless-stopped
+    # Applies migrations, then starts the API. It never seeds: the seed accounts have a public password.
+    command: sh -c "npx prisma migrate deploy && npm start"
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://seatbook:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (see the top of this file)}@db:5432/seatbook
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET (see the top of this file)}
+    ports:
+      - "${SERVER_PORT:-4000}:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  db-data:
