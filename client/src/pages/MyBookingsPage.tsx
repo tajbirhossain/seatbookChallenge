@@ -8,8 +8,6 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 export default function MyBookingsPage() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [totalSpent, setTotalSpent] = useState(0);
-  const [upcoming, setUpcoming] = useState(0);
   const [holds, setHolds] = useState<any[]>([]);
   const [toast, setToast] = useState<{ type: string; message: string } | null>(null);
   // The action waiting for the user to confirm it in the dialog.
@@ -39,15 +37,6 @@ export default function MyBookingsPage() {
       .then((res) => res.json())
       .then((data) => {
         setBookings(data);
-
-        let spent = 0;
-        let up = 0;
-        data.forEach((b: any) => {
-          spent += parseFloat(b.event.price.replace('$', ''));
-          if (new Date(b.event.startsAt) > new Date()) up++;
-        });
-        setTotalSpent(spent);
-        setUpcoming(up);
         setLoading(false);
       });
   };
@@ -112,6 +101,14 @@ export default function MyBookingsPage() {
     }
     loadBookings();
   };
+
+  // The summary boxes are worked out from the list, so they always match it and update after a cancel.
+  // Cancelled bookings are counted on their own and left out of "Upcoming" and "Total Spent".
+  const confirmed = bookings.filter((b) => b.status !== 'CANCELLED');
+  const cancelledCount = bookings.length - confirmed.length;
+  const upcoming = confirmed.filter((b) => new Date(b.event.startsAt) > new Date()).length;
+  // Summed in cents so amounts like $0.10 + $0.20 don't pick up floating-point noise.
+  const totalSpentCents = confirmed.reduce((sum, b) => sum + Math.round(parseFloat(b.event.price.replace('$', '')) * 100), 0);
 
   if (loading) {
     return (
@@ -184,7 +181,7 @@ export default function MyBookingsPage() {
       </h1>
       <p className="text-white/50 mb-10">All your amazing experiences in one place ✨</p>
 
-      <div className="grid grid-cols-3 gap-6 mb-10">
+      <div className="grid grid-cols-4 gap-6 mb-10">
         <div className="glass rounded-2xl p-6">
           <div className="text-white/50 text-sm">Total Bookings</div>
           <div className="text-4xl font-bold gradient-text">{bookings.length}</div>
@@ -194,8 +191,12 @@ export default function MyBookingsPage() {
           <div className="text-4xl font-bold gradient-text">{upcoming}</div>
         </div>
         <div className="glass rounded-2xl p-6">
+          <div className="text-white/50 text-sm">Cancelled</div>
+          <div className="text-4xl font-bold text-[#fca5a5]">{cancelledCount}</div>
+        </div>
+        <div className="glass rounded-2xl p-6">
           <div className="text-white/50 text-sm">Total Spent</div>
-          <div className="text-4xl font-bold gradient-text">${totalSpent.toFixed(2)}</div>
+          <div className="text-4xl font-bold gradient-text">${(totalSpentCents / 100).toFixed(2)}</div>
         </div>
       </div>
 
