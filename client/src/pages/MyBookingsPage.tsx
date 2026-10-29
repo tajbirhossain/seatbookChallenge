@@ -262,7 +262,13 @@ export default function MyBookingsPage() {
             <div className="flex items-center gap-6">
               <span className="px-3 py-1 rounded-full bg-[#a855f7]/20 text-[#d8b4fe] text-sm">💺 {b.seat}</span>
               <span className="font-bold">{b.event.price}</span>
-              <span className="px-3 py-1 rounded-full bg-[#22c55e]/20 text-[#86efac] text-sm">✓ {b.status}</span>
+              <span
+                className={`px-3 py-1 rounded-full text-sm ${
+                  b.status === 'CANCELLED' ? 'bg-[#ef4444]/20 text-[#fca5a5]' : 'bg-[#22c55e]/20 text-[#86efac]'
+                }`}
+              >
+                {b.status === 'CANCELLED' ? '✕' : '✓'} {b.status}
+              </span>
               {b.status === 'CONFIRMED' && (
                 <button
                   onClick={() => setPending({ kind: 'cancel', booking: b })}

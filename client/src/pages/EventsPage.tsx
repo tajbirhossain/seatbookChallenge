@@ -3,6 +3,23 @@ import { Link } from 'react-router-dom';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
+// Green while plenty of seats remain, amber when nearly full, red when sold out, grey once the event is over.
+function seatsBadge(event: any) {
+  if (new Date(event.startsAt) < new Date()) {
+    return { text: 'Ended', className: 'bg-white/10 text-white/60' };
+  }
+  if (event.seatsLeft === 0) {
+    return { text: 'Sold out', className: 'bg-[#ef4444]/20 text-[#fca5a5]' };
+  }
+
+  const text = `${event.seatsLeft} ${event.seatsLeft === 1 ? 'seat' : 'seats'} left`;
+  const nearlyFull = event.seatsLeft <= Math.max(3, event.totalSeats * 0.15);
+  return {
+    text,
+    className: nearlyFull ? 'bg-[#f59e0b]/20 text-[#fcd34d]' : 'bg-[#22c55e]/20 text-[#86efac]',
+  };
+}
+
 export default function EventsPage() {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,8 +121,8 @@ export default function EventsPage() {
             </p>
             <div className="mt-6 flex items-center gap-4">
               <span className="text-3xl font-extrabold gradient-text">{featured.price}</span>
-              <span className="px-3 py-1 rounded-full bg-[#22c55e]/20 text-[#86efac] text-sm">
-                {featured.seatsLeft} seats left
+              <span className={`px-3 py-1 rounded-full text-sm ${seatsBadge(featured).className}`}>
+                {seatsBadge(featured).text}
               </span>
             </div>
           </div>
@@ -134,8 +151,8 @@ export default function EventsPage() {
               </p>
               <div className="mt-4 flex items-center justify-between">
                 <span className="text-2xl font-extrabold gradient-text">{event.price}</span>
-                <span className="px-3 py-1 rounded-full bg-[#22c55e]/20 text-[#86efac] text-sm">
-                  {event.seatsLeft} seats left
+                <span className={`px-3 py-1 rounded-full text-sm ${seatsBadge(event).className}`}>
+                  {seatsBadge(event).text}
                 </span>
               </div>
             </div>

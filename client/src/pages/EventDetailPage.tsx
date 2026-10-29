@@ -368,7 +368,11 @@ export default function EventDetailPage() {
       )}
 
       <div className="rounded-3xl p-10 bg-gradient-to-br from-[#a855f7]/30 via-[#ec4899]/20 to-[#f97316]/20 border border-white/10 glow">
-        <span className="px-3 py-1 rounded-full bg-[#a855f7]/30 text-[#d8b4fe] text-xs font-bold">
+        <span
+          className={`px-3 py-1 rounded-full text-xs font-bold ${
+            isPast ? 'bg-white/10 text-white/60' : 'bg-[#a855f7]/30 text-[#d8b4fe]'
+          }`}
+        >
           {isPast ? '⏰ ENDED' : '✨ LIVE NOW'}
         </span>
         <h1 className="mt-4 text-5xl font-extrabold">{event.title}</h1>
