@@ -70,5 +70,10 @@ model Booking {
   // Set while status is HELD: the hold is released once this time passes.
   expiresAt   DateTime?
 
+  // Sweeper: HELD rows that have expired.
   @@index([status, expiresAt])
+  // A user's bookings, holds, hold count and expired holds. Without it each of these scans
+  // every booking (or every row with the same status). Seat lookups need no index here: they
+  // use the partial unique index on active bookings (see migration 20261028000100).
+  @@index([userId, status])
 }
