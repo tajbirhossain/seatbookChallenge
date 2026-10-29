@@ -228,11 +228,11 @@ describe('database errors become safe responses and never crash the API', () => 
 
     const res = await call('POST', '/events', {
       token: organizer(),
-      body: { title: 't', venue: 'v', startsAt: 'not a date', rows: 2, cols: 2 },
+      body: { title: 't', venue: 'v', startsAt: '2031-01-01T10:00:00Z', rows: 2, cols: 2 },
     });
 
     expect(res).toMatchObject({ status: 400, json: { error: 'Invalid request data' } });
-    expect(res.text).not.toContain('startsAt');
+    expect(res.text).not.toContain('Argument');
   });
 
   it('handles database errors in login, register and bookings', async () => {
@@ -262,7 +262,7 @@ describe('database errors become safe responses and never crash the API', () => 
     vi.spyOn(prisma.user, 'create').mockRejectedValue(dbError('P2002'));
 
     const res = await call('POST', '/auth/register', {
-      body: { email: 'taken@test.local', password: 'pw12345', name: 'Taken' },
+      body: { email: 'taken@test.local', password: 'password123', name: 'Taken' },
     });
 
     expect(res).toMatchObject({ status: 409, json: { error: 'Email already registered' } });

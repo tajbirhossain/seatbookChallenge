@@ -29,12 +29,12 @@ export async function create(req: AuthRequest, res: Response) {
     throw new AppError(403, 'Only organizers can create events');
   }
 
-  const invalid = validateCreateEvent(req.body);
-  if (invalid) {
-    throw new AppError(400, invalid);
+  const input = validateCreateEvent(req.body);
+  if ('error' in input) {
+    throw new AppError(400, input.error);
   }
 
-  const event = await eventService.createEvent(req.user!.id, req.body);
+  const event = await eventService.createEvent(req.user!.id, input.data);
 
   res.status(201).json(event);
 }

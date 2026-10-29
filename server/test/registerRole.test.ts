@@ -64,7 +64,7 @@ describe('registration never takes the role from the request', () => {
   it.each(claimedRoles)('stores ATTENDEE when the request asks for %s', async (_name, role) => {
     const create = stubUserCreate();
 
-    const res = await post('/auth/register', { email: 'new@test.local', password: 'pw12345', name: 'New', role });
+    const res = await post('/auth/register', { email: 'new@test.local', password: 'password123', name: 'New', role });
 
     expect(res.status).toBe(201);
     expect(create).toHaveBeenCalledOnce();
@@ -76,7 +76,7 @@ describe('registration never takes the role from the request', () => {
   it('registers as ATTENDEE when no role is sent', async () => {
     const create = stubUserCreate();
 
-    const res = await post('/auth/register', { email: 'plain@test.local', password: 'pw12345', name: 'Plain' });
+    const res = await post('/auth/register', { email: 'plain@test.local', password: 'password123', name: 'Plain' });
 
     expect(res.status).toBe(201);
     expect((create.mock.calls[0][0] as any).data.role).toBe('ATTENDEE');
@@ -86,7 +86,7 @@ describe('registration never takes the role from the request', () => {
   it('does not pass any other client-supplied field through to the database', async () => {
     const create = stubUserCreate();
 
-    await post('/auth/register', { email: 'x@test.local', password: 'pw12345', name: 'X', role: 'ORGANIZER', id: 1 });
+    await post('/auth/register', { email: 'x@test.local', password: 'password123', name: 'X', role: 'ORGANIZER', id: 1 });
 
     expect(Object.keys((create.mock.calls[0][0] as any).data).sort()).toEqual(['email', 'name', 'passwordHash', 'role']);
   });
@@ -124,7 +124,7 @@ describe.skipIf(!process.env.DATABASE_URL)('self-registered accounts cannot act 
   it('saves an attendee, and that account cannot create events', async () => {
     const email = newEmail();
 
-    const registered = await post('/auth/register', { email, password: 'pw12345', name: 'Sneaky', role: 'ORGANIZER' });
+    const registered = await post('/auth/register', { email, password: 'password123', name: 'Sneaky', role: 'ORGANIZER' });
     const stored = await prisma.user.findUniqueOrThrow({ where: { email } });
     const created = await post('/events', validEvent, registered.json.token);
 
@@ -136,9 +136,9 @@ describe.skipIf(!process.env.DATABASE_URL)('self-registered accounts cannot act 
 
   it('stays an attendee after logging in again', async () => {
     const email = newEmail();
-    await post('/auth/register', { email, password: 'pw12345', name: 'Again', role: 'ORGANIZER' });
+    await post('/auth/register', { email, password: 'password123', name: 'Again', role: 'ORGANIZER' });
 
-    const login = await post('/auth/login', { email, password: 'pw12345' });
+    const login = await post('/auth/login', { email, password: 'password123' });
     const created = await post('/events', validEvent, login.json.token);
 
     expect(login.json.user.role).toBe('ATTENDEE');
@@ -148,7 +148,7 @@ describe.skipIf(!process.env.DATABASE_URL)('self-registered accounts cannot act 
   it('still registers a normal attendee who sends no role', async () => {
     const email = newEmail();
 
-    const registered = await post('/auth/register', { email, password: 'pw12345', name: 'Normal' });
+    const registered = await post('/auth/register', { email, password: 'password123', name: 'Normal' });
 
     expect(registered.status).toBe(201);
     expect(registered.json.user).toMatchObject({ email, name: 'Normal', role: 'ATTENDEE' });
@@ -158,10 +158,10 @@ describe.skipIf(!process.env.DATABASE_URL)('self-registered accounts cannot act 
     it('can log in as an organizer and create events', async () => {
       const email = newEmail();
       await prisma.user.create({
-        data: { email, name: 'Existing Organizer', passwordHash: await bcrypt.hash('pw12345', 10), role: 'ORGANIZER' },
+        data: { email, name: 'Existing Organizer', passwordHash: await bcrypt.hash('password123', 10), role: 'ORGANIZER' },
       });
 
-      const login = await post('/auth/login', { email, password: 'pw12345' });
+      const login = await post('/auth/login', { email, password: 'password123' });
       const created = await post('/events', validEvent, login.json.token);
       if (created.json?.id) eventIds.push(created.json.id);
 
@@ -174,9 +174,9 @@ describe.skipIf(!process.env.DATABASE_URL)('self-registered accounts cannot act 
     it('still rejects invalid events with the usual validation errors', async () => {
       const email = newEmail();
       await prisma.user.create({
-        data: { email, name: 'Organizer Two', passwordHash: await bcrypt.hash('pw12345', 10), role: 'ORGANIZER' },
+        data: { email, name: 'Organizer Two', passwordHash: await bcrypt.hash('password123', 10), role: 'ORGANIZER' },
       });
-      const { json } = await post('/auth/login', { email, password: 'pw12345' });
+      const { json } = await post('/auth/login', { email, password: 'password123' });
 
       expect(await post('/events', { title: 'x' }, json.token)).toMatchObject({
         status: 400,
