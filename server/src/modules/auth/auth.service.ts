@@ -1,11 +1,9 @@
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import prisma from '../../lib/prisma';
+import { signToken } from '../../lib/jwt';
 
 function toAuthResponse(user: { id: number; email: string; name: string; role: 'ORGANIZER' | 'ATTENDEE' }) {
-  const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, 'seatbook-secret-123', {
-    expiresIn: '7d',
-  });
+  const token = signToken({ id: user.id, email: user.email, role: user.role });
 
   return { token, user: { id: user.id, email: user.email, name: user.name, role: user.role } };
 }

@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import { JWT_SECRET } from '../config/env';
+import { verifyToken } from '../lib/jwt';
 
 export interface AuthUser {
   id: number;
@@ -20,8 +19,7 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
 
   const token = header.replace('Bearer ', '');
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as AuthUser;
-    req.user = payload;
+    req.user = verifyToken(token);
     next();
   } catch (err) {
     return res.status(401).json({ message: 'Invalid token' });

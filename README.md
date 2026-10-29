@@ -38,7 +38,7 @@ cd server && cp .env.example .env && npm install && npm run db:migrate && npm ru
 cd client && npm install && npm run dev
 ```
 
-You need a Postgres running at the `DATABASE_URL` in `server/.env`.
+You need a Postgres running at the `DATABASE_URL` in `server/.env`, and a `JWT_SECRET` there too: the server refuses to start without one.
 
 ## Scripts
 
