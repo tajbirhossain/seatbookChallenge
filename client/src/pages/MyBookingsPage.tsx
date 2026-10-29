@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import HoldCountdown from '../components/HoldCountdown';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -11,6 +12,11 @@ export default function MyBookingsPage() {
   const [upcoming, setUpcoming] = useState(0);
   const [holds, setHolds] = useState<any[]>([]);
   const [toast, setToast] = useState<{ type: string; message: string } | null>(null);
+  // The action waiting for the user to confirm it in the dialog.
+  const [pending, setPending] = useState<{ kind: 'cancel'; booking: any } | { kind: 'confirmHold'; hold: any } | null>(
+    null
+  );
+  const [busy, setBusy] = useState(false);
 
   const showToast = (type: string, message: string) => {
     setToast({ type, message });
@@ -51,6 +57,26 @@ export default function MyBookingsPage() {
     loadHolds();
   }, []);
 
+  // If the hold being confirmed runs out while the dialog is open, there is nothing left to confirm.
+  useEffect(() => {
+    if (pending?.kind === 'confirmHold' && !busy && !holds.some((h) => h.id === pending.hold.id)) {
+      setPending(null);
+    }
+  }, [holds, pending, busy]);
+
+  const runPending = async () => {
+    if (!pending) return;
+
+    setBusy(true);
+    try {
+      if (pending.kind === 'cancel') await cancelBooking(pending.booking.id);
+      else await confirmHold(pending.hold);
+    } finally {
+      setBusy(false);
+      setPending(null);
+    }
+  };
+
   const confirmHold = async (hold: any) => {
     const res = await fetch(`${API_URL}/bookings/${hold.id}/confirm`, {
       method: 'POST',
@@ -73,13 +99,17 @@ export default function MyBookingsPage() {
   };
 
   const cancelBooking = async (id: number) => {
-    if (!window.confirm('Are you sure you want to cancel? 😢')) return;
-
-    await fetch(`${API_URL}/bookings/${id}/cancel`, {
+    const res = await fetch(`${API_URL}/bookings/${id}/cancel`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     });
-    showToast('success', 'Booking cancelled successfully! ✅');
+
+    if (res.ok) {
+      showToast('success', 'Booking cancelled successfully! ✅');
+    } else {
+      const data = await res.json().catch(() => null);
+      showToast('error', '😢 ' + (data?.error || 'Could not cancel the booking'));
+    }
     loadBookings();
   };
 
@@ -104,6 +134,49 @@ export default function MyBookingsPage() {
         >
           {toast.message}
         </div>
+      )}
+
+      {pending && (
+        <ConfirmDialog
+          title={pending.kind === 'cancel' ? 'Cancel this booking?' : `Confirm seat ${pending.hold.seat}?`}
+          confirmLabel={pending.kind === 'cancel' ? 'Yes, cancel booking' : 'Confirm booking'}
+          cancelLabel={pending.kind === 'cancel' ? 'Keep booking' : 'Go back'}
+          tone={pending.kind === 'cancel' ? 'danger' : 'primary'}
+          busy={busy}
+          onConfirm={runPending}
+          onCancel={() => setPending(null)}
+        >
+          {(() => {
+            const item = pending.kind === 'cancel' ? pending.booking : pending.hold;
+            return (
+              <>
+                <p>
+                  {pending.kind === 'cancel'
+                    ? 'Your seat will be released and anyone will be able to book it. This can’t be undone.'
+                    : 'This turns your hold into a booking.'}
+                </p>
+                <div className="rounded-2xl bg-white/5 p-4 space-y-2">
+                  <div className="flex justify-between gap-4">
+                    <span>Event</span>
+                    <span className="text-white text-right">{item.event.title}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span>Seat</span>
+                    <span className="text-white">{item.seat}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span>Date</span>
+                    <span className="text-white">{item.event.startsAt.split('T')[0]}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span>Price</span>
+                    <span className="text-white">{item.event.price}</span>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+        </ConfirmDialog>
       )}
 
       <h1 className="text-5xl font-extrabold mb-2">
@@ -150,7 +223,7 @@ export default function MyBookingsPage() {
                   <span className="font-bold">{h.event.price}</span>
                   <HoldCountdown expiresAt={h.expiresAt} onExpire={() => holdExpired(h)} />
                   <button
-                    onClick={() => confirmHold(h)}
+                    onClick={() => setPending({ kind: 'confirmHold', hold: h })}
                     className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-sm font-semibold hover:scale-105 transition-all duration-300"
                   >
                     Confirm
@@ -190,12 +263,14 @@ export default function MyBookingsPage() {
               <span className="px-3 py-1 rounded-full bg-[#a855f7]/20 text-[#d8b4fe] text-sm">💺 {b.seat}</span>
               <span className="font-bold">{b.event.price}</span>
               <span className="px-3 py-1 rounded-full bg-[#22c55e]/20 text-[#86efac] text-sm">✓ {b.status}</span>
-              <button
-                onClick={() => cancelBooking(b.id)}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#ef4444] to-[#dc2626] text-sm font-semibold hover:scale-105 transition-all duration-300"
-              >
-                Cancel
-              </button>
+              {b.status === 'CONFIRMED' && (
+                <button
+                  onClick={() => setPending({ kind: 'cancel', booking: b })}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#ef4444] to-[#dc2626] text-sm font-semibold hover:scale-105 transition-all duration-300"
+                >
+                  Cancel
+                </button>
+              )}
             </div>
           </div>
         ))}

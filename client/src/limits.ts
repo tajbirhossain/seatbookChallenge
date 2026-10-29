@@ -11,4 +11,6 @@ export const LIMITS = {
   rows: 26,
   cols: 30,
   priceMaxDollars: 1_000_000,
+  holdMinutes: 10,
+  maxHolds: 2,
 };

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import HoldCountdown from '../components/HoldCountdown';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { LIMITS } from '../limits';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -17,6 +19,11 @@ export default function EventDetailPage() {
   const [blockedLabels, setBlockedLabels] = useState<string[]>([]);
   const [loadError, setLoadError] = useState('');
   const eventLoaded = useRef(false);
+  // The action waiting for the user to confirm it in the dialog.
+  const [pending, setPending] = useState<
+    { kind: 'book'; seat: any } | { kind: 'hold'; seat: any } | { kind: 'confirmHold'; hold: any } | null
+  >(null);
+  const [busy, setBusy] = useState(false);
 
   const showToast = (type: string, message: string) => {
     setToast({ type, message });
@@ -111,6 +118,51 @@ export default function EventDetailPage() {
     fetchHolds();
     fetchBlockedSeats();
   }, [id]);
+
+  // If the hold being confirmed runs out while the dialog is open, there is nothing left to confirm.
+  useEffect(() => {
+    if (pending?.kind === 'confirmHold' && !busy && !holds.some((h) => h.id === pending.hold.id)) {
+      setPending(null);
+    }
+  }, [holds, pending, busy]);
+
+  const askBook = () => {
+    if (!selectedSeat) {
+      showToast('error', 'Please select a seat first! 🪑');
+      return;
+    }
+    if (!localStorage.getItem('token')) {
+      navigate('/login');
+      return;
+    }
+    setPending({ kind: 'book', seat: selectedSeat });
+  };
+
+  const askHold = () => {
+    if (!selectedSeat) {
+      showToast('error', 'Please select a seat first! 🪑');
+      return;
+    }
+    if (!localStorage.getItem('token')) {
+      navigate('/login');
+      return;
+    }
+    setPending({ kind: 'hold', seat: selectedSeat });
+  };
+
+  const runPending = async () => {
+    if (!pending) return;
+
+    setBusy(true);
+    try {
+      if (pending.kind === 'book') await handleBook();
+      else if (pending.kind === 'hold') await handleHold();
+      else await handleConfirmHold(pending.hold);
+    } finally {
+      setBusy(false);
+      setPending(null);
+    }
+  };
 
   const handleBook = async () => {
     if (!selectedSeat) {
@@ -255,6 +307,66 @@ export default function EventDetailPage() {
         </div>
       )}
 
+      {pending && (
+        <ConfirmDialog
+          title={
+            pending.kind === 'book'
+              ? `Book seat ${pending.seat.label}?`
+              : pending.kind === 'hold'
+              ? `Hold seat ${pending.seat.label}?`
+              : `Confirm seat ${pending.hold.seat}?`
+          }
+          confirmLabel={pending.kind === 'book' ? 'Book seat' : pending.kind === 'hold' ? 'Hold seat' : 'Confirm booking'}
+          busy={busy}
+          onConfirm={runPending}
+          onCancel={() => setPending(null)}
+        >
+          {pending.kind === 'hold' ? (
+            <>
+              <p>
+                Seat <strong className="text-white">{pending.seat.label}</strong> will be held for you for{' '}
+                {LIMITS.holdMinutes} minutes.
+              </p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Nobody else can book it while you hold it.</li>
+                <li>You can hold at most {LIMITS.maxHolds} seats at a time.</li>
+                <li>If the hold runs out, this seat will no longer be available to you.</li>
+              </ul>
+            </>
+          ) : (
+            <>
+              <p>
+                {pending.kind === 'book'
+                  ? 'This books the seat right away. You can cancel it later from My Bookings.'
+                  : 'This turns your hold into a booking.'}
+              </p>
+              <div className="rounded-2xl bg-white/5 p-4 space-y-2">
+                <div className="flex justify-between gap-4">
+                  <span>Event</span>
+                  <span className="text-white text-right">{event.title}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span>Seat</span>
+                  <span className="text-white">{pending.kind === 'confirmHold' ? pending.hold.seat : pending.seat.label}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span>Ticket</span>
+                  <span className="text-white">${price.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span>Service fee (5%)</span>
+                  <span className="text-white">${serviceFee.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between gap-4 border-t border-white/10 pt-2 font-bold text-white">
+                  <span>Total</span>
+                  <span>${total.toFixed(2)}</span>
+                </div>
+              </div>
+            </>
+          )}
+        </ConfirmDialog>
+      )}
+
       <div className="rounded-3xl p-10 bg-gradient-to-br from-[#a855f7]/30 via-[#ec4899]/20 to-[#f97316]/20 border border-white/10 glow">
         <span className="px-3 py-1 rounded-full bg-[#a855f7]/30 text-[#d8b4fe] text-xs font-bold">
           {isPast ? '⏰ ENDED' : '✨ LIVE NOW'}
@@ -356,13 +468,13 @@ export default function EventDetailPage() {
               </div>
             </div>
             <button
-              onClick={handleBook}
+              onClick={askBook}
               className="mt-8 w-full py-4 rounded-2xl bg-gradient-to-r from-[#a855f7] via-[#ec4899] to-[#f97316] font-bold text-lg hover:scale-[1.02] hover:shadow-2xl hover:shadow-pink-500/40 transition-all duration-300"
             >
               Book Now 🎟️
             </button>
             <button
-              onClick={handleHold}
+              onClick={askHold}
               className="mt-3 w-full py-3 rounded-2xl border border-[#f59e0b]/60 text-[#fcd34d] font-semibold hover:bg-[#f59e0b]/10 transition-all duration-300"
             >
               Hold for 10 minutes ⏳
@@ -380,7 +492,7 @@ export default function EventDetailPage() {
                     <span className="px-3 py-1 rounded-full bg-[#f59e0b]/20 text-[#fcd34d] text-sm">💺 {hold.seat}</span>
                     <HoldCountdown expiresAt={hold.expiresAt} onExpire={() => handleHoldExpired(hold)} />
                     <button
-                      onClick={() => handleConfirmHold(hold)}
+                      onClick={() => setPending({ kind: 'confirmHold', hold })}
                       className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-sm font-semibold hover:scale-105 transition-all duration-300"
                     >
                       Confirm

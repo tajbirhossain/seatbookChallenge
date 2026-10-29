@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FormField from '../components/FormField';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { LIMITS } from '../limits';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -35,6 +36,8 @@ export default function CreateEventPage() {
   const [cols, setCols] = useState(8);
   const [price, setPrice] = useState('0');
   const [error, setError] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   // Only flagged once something has been entered, so an untouched form isn't covered in red.
   const startsInPast = startsAt !== '' && new Date(startsAt).getTime() <= Date.now();
@@ -43,10 +46,27 @@ export default function CreateEventPage() {
   const priceNumber = parseFloat(price);
   const priceInvalid = price.trim() === '' || Number.isNaN(priceNumber) || priceNumber < 0 || priceNumber > LIMITS.priceMaxDollars;
 
-  const handleSubmit = async (e: FormEvent) => {
+  // Checks the obvious mistakes before asking for confirmation; the server still validates everything.
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     setError('');
 
+    if (!title.trim() || !venue.trim()) {
+      setError('Please enter a title and a venue.');
+    } else if (startsAt === '') {
+      setError('Please pick a date and time.');
+    } else if (startsInPast) {
+      setError('The event must start in the future.');
+    } else if (rowsInvalid || colsInvalid) {
+      setError(`The seat grid must be 1 to ${LIMITS.rows} rows and 1 to ${LIMITS.cols} seats per row.`);
+    } else if (priceInvalid) {
+      setError('Enter a valid ticket price (0 or more).');
+    } else {
+      setConfirming(true);
+    }
+  };
+
+  const publishEvent = async () => {
     try {
       const res = await fetch(`${API_URL}/events`, {
         method: 'POST',
@@ -78,6 +98,16 @@ export default function CreateEventPage() {
     }
   };
 
+  const confirmPublish = async () => {
+    setBusy(true);
+    try {
+      await publishEvent();
+    } finally {
+      setBusy(false);
+      setConfirming(false);
+    }
+  };
+
   const previewRows = [];
   for (let r = 0; r < Number(rows); r++) {
     const seats = [];
@@ -89,6 +119,46 @@ export default function CreateEventPage() {
 
   return (
     <div>
+      {confirming && (
+        <ConfirmDialog
+          title="Publish this event?"
+          confirmLabel="Publish event"
+          cancelLabel="Keep editing"
+          busy={busy}
+          onConfirm={confirmPublish}
+          onCancel={() => setConfirming(false)}
+        >
+          <p>
+            Your event goes live right away and people can start booking seats. The seat grid can&rsquo;t be changed
+            after publishing.
+          </p>
+          <div className="rounded-2xl bg-white/5 p-4 space-y-2">
+            <div className="flex justify-between gap-4">
+              <span>Title</span>
+              <span className="text-white text-right break-words min-w-0">{title.trim()}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span>Venue</span>
+              <span className="text-white text-right break-words min-w-0">{venue.trim()}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span>Starts</span>
+              <span className="text-white text-right">{new Date(startsAt).toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span>Seats</span>
+              <span className="text-white text-right">
+                {rows * cols} ({rows} rows × {cols} per row)
+              </span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span>Ticket price</span>
+              <span className="text-white">${priceNumber.toFixed(2)}</span>
+            </div>
+          </div>
+        </ConfirmDialog>
+      )}
+
       <h1 className="text-5xl font-extrabold mb-2">
         Create <span className="gradient-text">Event</span> ✨
       </h1>
