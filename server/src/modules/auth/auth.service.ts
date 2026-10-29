@@ -10,7 +10,9 @@ function toAuthResponse(user: { id: number; email: string; name: string; role: '
   return { token, user: { id: user.id, email: user.email, name: user.name, role: user.role } };
 }
 
-export async function register(input: { email: string; password: string; name: string; role?: string }) {
+// Registration always creates an attendee. The role is never taken from the request:
+// organizer accounts are created outside the public sign-up flow (see prisma/seed.ts).
+export async function register(input: { email: string; password: string; name: string }) {
   const passwordHash = await bcrypt.hash(input.password, 10);
 
   try {
@@ -19,7 +21,7 @@ export async function register(input: { email: string; password: string; name: s
         email: input.email,
         name: input.name,
         passwordHash,
-        role: input.role === 'ORGANIZER' ? 'ORGANIZER' : 'ATTENDEE',
+        role: 'ATTENDEE',
       },
     });
 

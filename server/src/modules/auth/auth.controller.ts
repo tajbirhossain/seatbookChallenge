@@ -9,8 +9,8 @@ export async function register(req: Request, res: Response) {
     throw new AppError(400, invalid);
   }
 
-  const { email, password, name, role } = req.body;
-  const result = await authService.register({ email, password, name, role });
+  const { email, password, name } = req.body;
+  const result = await authService.register({ email, password, name });
 
   res.status(201).json(result);
 }
