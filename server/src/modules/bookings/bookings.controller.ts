@@ -94,7 +94,18 @@ export async function listBlockedSeats(req: AuthRequest, res: Response) {
 }
 
 export async function cancel(req: AuthRequest, res: Response) {
-  await bookingService.cancelBooking(parseBookingId(req));
+  const result = await bookingService.cancelBooking(req.user!.id, parseBookingId(req));
+
+  if ('error' in result) {
+    switch (result.error) {
+      case 'NOT_FOUND':
+        throw new AppError(404, 'Booking not found');
+      case 'NOT_OWNER':
+        throw new AppError(403, 'You can only cancel your own bookings');
+      case 'NOT_CANCELLABLE':
+        throw new AppError(409, 'Only confirmed bookings can be cancelled');
+    }
+  }
 
   res.json({ success: true });
 }

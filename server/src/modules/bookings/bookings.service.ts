@@ -196,9 +196,30 @@ export async function listBlockedSeats(userId: number, eventId?: number) {
   return lapsed.map((b) => ({ seatId: b.seatId, label: b.seat.label, eventId: b.seat.eventId }));
 }
 
-export async function cancelBooking(id: number) {
-  await prisma.booking.updateMany({
-    where: { id, status: 'CONFIRMED' },
+export type CancelBookingResult = { cancelled: true } | { error: 'NOT_FOUND' | 'NOT_OWNER' | 'NOT_CANCELLABLE' };
+
+// Cancels one of the user's own confirmed bookings. Cancelling a booking that is already
+// cancelled is a no-op that succeeds, so a retried request is harmless.
+export async function cancelBooking(userId: number, bookingId: number): Promise<CancelBookingResult> {
+  // One atomic update that only matches the owner's confirmed booking.
+  const cancelled = await prisma.booking.updateMany({
+    where: { id: bookingId, userId, status: 'CONFIRMED' },
     data: { status: 'CANCELLED', cancelledAt: new Date() },
   });
+  if (cancelled.count === 1) {
+    return { cancelled: true };
+  }
+
+  // Nothing was cancelled: work out why.
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+  if (!booking) {
+    return { error: 'NOT_FOUND' };
+  }
+  if (booking.userId !== userId) {
+    return { error: 'NOT_OWNER' };
+  }
+  if (booking.status === 'CANCELLED') {
+    return { cancelled: true };
+  }
+  return { error: 'NOT_CANCELLABLE' }; // a hold or expired hold, not a booking
 }

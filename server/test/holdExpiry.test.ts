@@ -98,7 +98,7 @@ describe.skipIf(!process.env.DATABASE_URL)('seat unavailable after your own hold
     const held = await holdSeat(user, seat);
     if ('booking' in held) {
       await confirmHold(user, held.booking.id);
-      await cancelBooking(held.booking.id);
+      await cancelBooking(user, held.booking.id);
     }
 
     expect(await createBooking(user, seat)).toHaveProperty('booking');
