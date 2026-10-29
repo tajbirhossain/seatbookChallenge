@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import HoldCountdown from '../components/HoldCountdown';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -15,36 +15,62 @@ export default function EventDetailPage() {
   const [holds, setHolds] = useState<any[]>([]);
   // Labels of seats the user can't take any more because their own hold on them expired.
   const [blockedLabels, setBlockedLabels] = useState<string[]>([]);
+  const [loadError, setLoadError] = useState('');
+  const eventLoaded = useRef(false);
 
   const showToast = (type: string, message: string) => {
     setToast({ type, message });
     setTimeout(() => setToast(null), 3000);
   };
 
-  const fetchEvent = () => {
-    fetch(`${API_URL}/events/${id}`)
-      .then((res) => res.json())
-      .then((data) => {
-        setEvent(data);
+  // Before the event has loaded a failure replaces the page with an error message; once it is
+  // showing, a failed refresh only raises a toast so the page isn't wiped.
+  const handleLoadError = (message: string) => {
+    if (eventLoaded.current) {
+      showToast('error', '😢 ' + message);
+    } else {
+      setLoadError(message);
+    }
+  };
 
-        const grouped: any[][] = [];
-        data.seats.forEach((seat: any) => {
-          if (!grouped[seat.row]) grouped[seat.row] = [];
-          grouped[seat.row].push(seat);
-        });
-        setRows(grouped);
+  const fetchEvent = async () => {
+    let data: any;
+    try {
+      const res = await fetch(`${API_URL}/events/${id}`);
+      data = await res.json().catch(() => null);
 
-        // Drop the selection if someone else took that seat in the meantime.
-        setSelectedSeat((current: any) =>
-          current && data.seats.some((s: any) => s.id === current.id && s.available) ? current : null
+      if (!res.ok || !Array.isArray(data?.seats)) {
+        handleLoadError(
+          typeof data?.error === 'string' ? data.error : 'Something went wrong while loading this event'
         );
+        return;
+      }
+    } catch {
+      handleLoadError('Could not reach the server. Check your connection and try again.');
+      return;
+    }
 
-        let count = 0;
-        data.seats.forEach((seat: any) => {
-          if (seat.available) count++;
-        });
-        setAvailableCount(count);
-      });
+    eventLoaded.current = true;
+    setLoadError('');
+    setEvent(data);
+
+    const grouped: any[][] = [];
+    data.seats.forEach((seat: any) => {
+      if (!grouped[seat.row]) grouped[seat.row] = [];
+      grouped[seat.row].push(seat);
+    });
+    setRows(grouped);
+
+    // Drop the selection if someone else took that seat in the meantime.
+    setSelectedSeat((current: any) =>
+      current && data.seats.some((s: any) => s.id === current.id && s.available) ? current : null
+    );
+
+    let count = 0;
+    data.seats.forEach((seat: any) => {
+      if (seat.available) count++;
+    });
+    setAvailableCount(count);
   };
 
   // The logged-in user's active holds on this event.
@@ -75,6 +101,12 @@ export default function EventDetailPage() {
   };
 
   useEffect(() => {
+    // Opening a different event starts from a clean slate instead of showing the previous one.
+    eventLoaded.current = false;
+    setEvent(null);
+    setLoadError('');
+    setSelectedSeat(null);
+
     fetchEvent();
     fetchHolds();
     fetchBlockedSeats();
@@ -164,6 +196,33 @@ export default function EventDetailPage() {
     fetchEvent();
     fetchBlockedSeats();
   };
+
+  if (!event && loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 text-center">
+        <div className="text-6xl">😕</div>
+        <h1 className="mt-6 text-3xl font-extrabold">Couldn't load this event</h1>
+        <p className="mt-3 text-white/60">{loadError}</p>
+        <div className="mt-8 flex gap-4">
+          <button
+            onClick={() => {
+              setLoadError('');
+              fetchEvent();
+            }}
+            className="px-6 py-3 rounded-2xl border border-white/20 text-white/80 hover:bg-white/10 transition-all duration-300"
+          >
+            Try again
+          </button>
+          <Link
+            to="/"
+            className="px-6 py-3 rounded-2xl bg-gradient-to-r from-[#a855f7] via-[#ec4899] to-[#f97316] font-semibold hover:scale-105 transition-all duration-300"
+          >
+            Browse events
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (!event) {
     return (

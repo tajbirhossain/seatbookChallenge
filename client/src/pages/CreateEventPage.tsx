@@ -3,6 +3,17 @@ import { useNavigate } from 'react-router-dom';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
+// The API answers every failure with { "error": "message" }.
+async function readErrorMessage(res: Response) {
+  try {
+    const data = await res.json();
+    if (typeof data?.error === 'string' && data.error) return data.error;
+  } catch {
+    // body was not JSON
+  }
+  return 'Something went wrong 😢';
+}
+
 export default function CreateEventPage() {
   const navigate = useNavigate();
   const [title, setTitle] = useState('');
@@ -37,7 +48,7 @@ export default function CreateEventPage() {
       });
 
       if (!res.ok) {
-        setError(await res.text());
+        setError(await readErrorMessage(res));
         return;
       }
 
