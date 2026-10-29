@@ -84,3 +84,21 @@ A held seat shows as unavailable to everyone else until the hold is confirmed or
 Every error response is JSON shaped `{ "error": "message" }`: 400 for malformed input, 401 not logged in, 403 not allowed, 404 not found, 409 conflict, 503 when the database is unreachable and 500 for anything unexpected (details are logged on the server, never sent).
 
 Send the token as `Authorization: Bearer <token>`.
+
+
+## Handover Notes
+
+### What I changed
+Added 10-minute seat holds, expiry and confirmation. Improved booking safety, input validation, error handling and production configuration.
+
+### What is left before launch
+Rate limiting, proper hosting, backups and monitoring should be added. Payment processing is not implemented and is needed before accepting payments.
+
+### Weakest part
+The frontend has no automated test suite, so UI testing is less complete than backend testing.
+
+### Where AI was wrong
+AI changes caused two pages to show a blank screen when the API returned an error. I tested the error cases, found the problem and fixed it.
+
+### How I tested it
+All 249 backend tests passed against PostgreSQL, with no skipped tests. I also checked Docker Compose, tested the API and verified the client production build.
