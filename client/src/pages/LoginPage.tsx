@@ -1,5 +1,10 @@
 import { useState, FormEvent } from 'react';
 import GradientButton from '../components/GradientButton';
+import FormField from '../components/FormField';
+import { LIMITS } from '../limits';
+
+const inputClass =
+  'w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#a855f7] transition-all duration-300';
 
 export default function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -7,6 +12,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+
+  // The server limits passwords in bytes (bcrypt ignores everything after 72 bytes).
+  const passwordBytes = new TextEncoder().encode(password).length;
+  const passwordTooShort = password.length > 0 && password.length < LIMITS.passwordMin;
+  const passwordTooLong = passwordBytes > LIMITS.passwordMaxBytes;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -44,26 +54,56 @@ export default function LoginPage() {
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           {!isLogin && (
-            <input
-              placeholder="👤 Full name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#a855f7] transition-all duration-300"
-            />
+            <FormField
+              label="Full name"
+              htmlFor="name"
+              hint={`Up to ${LIMITS.name} characters`}
+              limit={{ used: name.length, max: LIMITS.name }}
+            >
+              <input
+                id="name"
+                placeholder="👤 Full name"
+                value={name}
+                maxLength={LIMITS.name}
+                onChange={(e) => setName(e.target.value)}
+                className={inputClass}
+              />
+            </FormField>
           )}
-          <input
-            placeholder="📧 Email address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#a855f7] transition-all duration-300"
-          />
-          <input
-            type="password"
-            placeholder="🔒 Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#a855f7] transition-all duration-300"
-          />
+          <FormField
+            label="Email address"
+            htmlFor="email"
+            hint={isLogin ? undefined : 'Used to sign in. Capital letters don’t matter.'}
+          >
+            <input
+              id="email"
+              placeholder="📧 Email address"
+              value={email}
+              maxLength={LIMITS.email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={inputClass}
+            />
+          </FormField>
+          <FormField
+            label="Password"
+            htmlFor="password"
+            hint={
+              isLogin
+                ? undefined
+                : `At least ${LIMITS.passwordMin} characters, up to ${LIMITS.passwordMaxBytes} bytes (accents and emoji count extra)`
+            }
+            invalid={!isLogin && (passwordTooShort || passwordTooLong)}
+            limit={isLogin ? undefined : { used: passwordBytes, max: LIMITS.passwordMaxBytes }}
+          >
+            <input
+              id="password"
+              type="password"
+              placeholder="🔒 Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={inputClass}
+            />
+          </FormField>
           {error && <p className="text-[#fca5a5] text-sm">⚠️ {error}</p>}
           <GradientButton type="submit">{isLogin ? 'Sign In 🚀' : 'Create Account ✨'}</GradientButton>
         </form>

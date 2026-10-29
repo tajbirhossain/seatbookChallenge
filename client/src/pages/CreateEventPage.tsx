@@ -1,7 +1,12 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import FormField from '../components/FormField';
+import { LIMITS } from '../limits';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
+const inputClass =
+  'w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#a855f7] transition-all duration-300';
 
 // The API answers every failure with { "error": "message" }.
 async function readErrorMessage(res: Response) {
@@ -14,6 +19,12 @@ async function readErrorMessage(res: Response) {
   return 'Something went wrong 😢';
 }
 
+// "YYYY-MM-DDTHH:mm" in local time, the format a datetime-local input expects.
+function localNow() {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
 export default function CreateEventPage() {
   const navigate = useNavigate();
   const [title, setTitle] = useState('');
@@ -24,6 +35,13 @@ export default function CreateEventPage() {
   const [cols, setCols] = useState(8);
   const [price, setPrice] = useState('0');
   const [error, setError] = useState('');
+
+  // Only flagged once something has been entered, so an untouched form isn't covered in red.
+  const startsInPast = startsAt !== '' && new Date(startsAt).getTime() <= Date.now();
+  const rowsInvalid = !Number.isInteger(rows) || rows < 1 || rows > LIMITS.rows;
+  const colsInvalid = !Number.isInteger(cols) || cols < 1 || cols > LIMITS.cols;
+  const priceNumber = parseFloat(price);
+  const priceInvalid = price.trim() === '' || Number.isNaN(priceNumber) || priceNumber < 0 || priceNumber > LIMITS.priceMaxDollars;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -78,50 +96,125 @@ export default function CreateEventPage() {
 
       <div className="grid grid-cols-2 gap-8">
         <form onSubmit={handleSubmit} className="glass rounded-3xl p-8 space-y-4">
-          <input
-            placeholder="🎭 Event title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#a855f7] transition-all duration-300"
-          />
-          <textarea
-            placeholder="📝 Description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#a855f7] transition-all duration-300"
-          />
-          <input
-            placeholder="📍 Venue"
-            value={venue}
-            onChange={(e) => setVenue(e.target.value)}
-            className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#a855f7] transition-all duration-300"
-          />
-          <input
-            type="datetime-local"
-            value={startsAt}
-            onChange={(e) => setStartsAt(e.target.value)}
-            className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#a855f7] transition-all duration-300"
-          />
+          <FormField
+            label="Event title"
+            htmlFor="title"
+            badge="required"
+            hint={`Up to ${LIMITS.title} characters`}
+            limit={{ used: title.length, max: LIMITS.title }}
+          >
+            <input
+              id="title"
+              placeholder="🎭 Event title"
+              value={title}
+              maxLength={LIMITS.title}
+              onChange={(e) => setTitle(e.target.value)}
+              className={inputClass}
+            />
+          </FormField>
+          <FormField
+            label="Description"
+            htmlFor="description"
+            badge="optional"
+            hint={`Up to ${LIMITS.description} characters`}
+            limit={{ used: description.length, max: LIMITS.description }}
+          >
+            <textarea
+              id="description"
+              placeholder="📝 Description"
+              value={description}
+              maxLength={LIMITS.description}
+              onChange={(e) => setDescription(e.target.value)}
+              className={inputClass}
+            />
+          </FormField>
+          <FormField
+            label="Venue"
+            htmlFor="venue"
+            badge="required"
+            hint={`Up to ${LIMITS.venue} characters`}
+            limit={{ used: venue.length, max: LIMITS.venue }}
+          >
+            <input
+              id="venue"
+              placeholder="📍 Venue"
+              value={venue}
+              maxLength={LIMITS.venue}
+              onChange={(e) => setVenue(e.target.value)}
+              className={inputClass}
+            />
+          </FormField>
+          <FormField
+            label="Date and time"
+            htmlFor="startsAt"
+            badge="required"
+            hint={startsInPast ? 'This is in the past. Pick a future date and time.' : 'Must be in the future.'}
+            invalid={startsInPast}
+          >
+            <input
+              id="startsAt"
+              type="datetime-local"
+              value={startsAt}
+              min={localNow()}
+              onChange={(e) => setStartsAt(e.target.value)}
+              className={inputClass}
+            />
+          </FormField>
           <div className="grid grid-cols-3 gap-4">
-            <input
-              type="number"
-              value={rows}
-              onChange={(e) => setRows(Number(e.target.value))}
-              className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#a855f7] transition-all duration-300"
-            />
-            <input
-              type="number"
-              value={cols}
-              onChange={(e) => setCols(Number(e.target.value))}
-              className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#a855f7] transition-all duration-300"
-            />
-            <input
-              placeholder="💰 Price"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#a855f7] transition-all duration-300"
-            />
+            <FormField
+              label="Rows"
+              htmlFor="rows"
+              badge="required"
+              hint={`Whole number, 1 to ${LIMITS.rows}`}
+              invalid={rowsInvalid}
+            >
+              <input
+                id="rows"
+                type="number"
+                min={1}
+                max={LIMITS.rows}
+                value={rows}
+                onChange={(e) => setRows(Number(e.target.value))}
+                className={inputClass}
+              />
+            </FormField>
+            <FormField
+              label="Seats per row"
+              htmlFor="cols"
+              badge="required"
+              hint={`Whole number, 1 to ${LIMITS.cols}`}
+              invalid={colsInvalid}
+            >
+              <input
+                id="cols"
+                type="number"
+                min={1}
+                max={LIMITS.cols}
+                value={cols}
+                onChange={(e) => setCols(Number(e.target.value))}
+                className={inputClass}
+              />
+            </FormField>
+            <FormField
+              label="Ticket price ($)"
+              htmlFor="price"
+              hint="In dollars, e.g. 15.00. Use 0 for free."
+              invalid={priceInvalid}
+            >
+              <input
+                id="price"
+                placeholder="💰 Price"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                className={inputClass}
+              />
+            </FormField>
           </div>
+          <p className="text-xs text-white/40">
+            {rowsInvalid || colsInvalid
+              ? `The seat grid can be at most ${LIMITS.rows} rows by ${LIMITS.cols} seats per row.`
+              : `${rows * cols} seats in total (${rows} rows × ${cols} seats per row).`}
+          </p>
           {error && <p className="text-[#fca5a5] text-sm">⚠️ {error}</p>}
           <button
             type="submit"
