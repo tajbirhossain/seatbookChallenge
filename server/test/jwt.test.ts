@@ -63,28 +63,31 @@ describe('jwt signing and verification use JWT_SECRET', () => {
   });
 });
 
+// requireAuth hands a 401 AppError to the error middleware instead of responding itself.
+function expectRejected(next: NextFunction, message: string) {
+  expect(next).toHaveBeenCalledOnce();
+  expect(vi.mocked(next).mock.calls[0][0]).toMatchObject({ status: 401, message });
+}
+
 describe('requireAuth', () => {
   it('lets a request with a valid token through and sets req.user', () => {
     const { req, next } = runRequireAuth(`Bearer ${signToken(user)}`);
 
     expect(next).toHaveBeenCalledOnce();
+    expect(next).toHaveBeenCalledWith();
     expect(req.user).toMatchObject(user);
   });
 
   it('rejects a token signed with the old hardcoded secret', () => {
     const forged = jwt.sign({ ...user, role: 'ORGANIZER' }, 'seatbook-secret-123');
-    const { res, next } = runRequireAuth(`Bearer ${forged}`);
+    const { req, next } = runRequireAuth(`Bearer ${forged}`);
 
-    expect(next).not.toHaveBeenCalled();
-    expect(res.status).toHaveBeenCalledWith(401);
+    expectRejected(next, 'Invalid token');
+    expect(req.user).toBeUndefined();
   });
 
   it('rejects a missing or garbage token', () => {
-    for (const header of [undefined, 'Bearer not-a-token']) {
-      const { res, next } = runRequireAuth(header);
-
-      expect(next).not.toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(401);
-    }
+    expectRejected(runRequireAuth(undefined).next, 'Not logged in');
+    expectRejected(runRequireAuth('Bearer not-a-token').next, 'Invalid token');
   });
 });

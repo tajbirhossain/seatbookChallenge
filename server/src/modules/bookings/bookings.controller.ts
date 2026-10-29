@@ -1,8 +1,26 @@
 import { Response } from 'express';
+import { AppError } from '../../lib/errors';
 import { AuthRequest } from '../../middleware/auth';
+import { toPositiveInt } from '../../utils/helpers';
 import * as bookingService from './bookings.service';
 import type { ReserveSeatResult } from './bookings.service';
 import { MAX_ACTIVE_HOLDS } from './bookings.rules';
+
+function parseSeatId(body: any): number {
+  const seatId = toPositiveInt(body?.seatId);
+  if (seatId === null) {
+    throw new AppError(400, 'seatId must be a positive integer');
+  }
+  return seatId;
+}
+
+function parseBookingId(req: AuthRequest): number {
+  const id = toPositiveInt(req.params.id);
+  if (id === null) {
+    throw new AppError(400, 'Invalid booking id');
+  }
+  return id;
+}
 
 function sendReserveResult(res: Response, result: ReserveSeatResult) {
   if (!('error' in result)) {
@@ -11,104 +29,72 @@ function sendReserveResult(res: Response, result: ReserveSeatResult) {
 
   switch (result.error) {
     case 'SEAT_NOT_FOUND':
-      res.status(404).json({ error: 'Seat not found' });
-      break;
+      throw new AppError(404, 'Seat not found');
     case 'EVENT_STARTED':
-      res.status(400).json({ msg: 'This event has already started' });
-      break;
+      throw new AppError(400, 'This event has already started');
     case 'SEAT_TAKEN':
-      res.status(409).json({ error: 'Seat already booked' });
-      break;
+      throw new AppError(409, 'Seat already booked');
     case 'SEAT_HELD':
-      res.status(409).json({ error: 'Seat is currently on hold' });
-      break;
+      throw new AppError(409, 'Seat is currently on hold');
     case 'SEAT_HOLD_EXPIRED':
-      res.status(403).json({ error: 'Your hold on this seat expired, so it is no longer available to you' });
-      break;
+      throw new AppError(403, 'Your hold on this seat expired, so it is no longer available to you');
     case 'HOLD_LIMIT_REACHED':
-      res.status(409).json({ error: `You can hold at most ${MAX_ACTIVE_HOLDS} seats at a time` });
-      break;
+      throw new AppError(409, `You can hold at most ${MAX_ACTIVE_HOLDS} seats at a time`);
   }
 }
 
 export async function create(req: AuthRequest, res: Response) {
-  try {
-    const result = await bookingService.createBooking(req.user!.id, Number(req.body.seatId));
+  const result = await bookingService.createBooking(req.user!.id, parseSeatId(req.body));
 
-    sendReserveResult(res, result);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
+  sendReserveResult(res, result);
 }
 
 export async function hold(req: AuthRequest, res: Response) {
-  try {
-    const result = await bookingService.holdSeat(req.user!.id, Number(req.body.seatId));
+  const result = await bookingService.holdSeat(req.user!.id, parseSeatId(req.body));
 
-    sendReserveResult(res, result);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
+  sendReserveResult(res, result);
 }
 
 export async function confirm(req: AuthRequest, res: Response) {
-  try {
-    const id = parseInt(req.params.id);
-    if (Number.isNaN(id)) {
-      return res.status(404).json({ error: 'Booking not found' });
+  const result = await bookingService.confirmHold(req.user!.id, parseBookingId(req));
+
+  if ('error' in result) {
+    switch (result.error) {
+      case 'HOLD_NOT_FOUND':
+        throw new AppError(404, 'Booking not found');
+      case 'HOLD_EXPIRED':
+        throw new AppError(410, 'Hold has expired');
+      case 'NOT_HELD':
+        throw new AppError(409, 'Booking is not on hold');
     }
-
-    const result = await bookingService.confirmHold(req.user!.id, id);
-
-    if ('error' in result) {
-      switch (result.error) {
-        case 'HOLD_NOT_FOUND':
-          return res.status(404).json({ error: 'Booking not found' });
-        case 'HOLD_EXPIRED':
-          return res.status(410).json({ error: 'Hold has expired' });
-        case 'NOT_HELD':
-          return res.status(409).json({ error: 'Booking is not on hold' });
-      }
-    }
-
-    res.json(result.booking);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
   }
+
+  res.json(result.booking);
 }
 
 export async function listMine(req: AuthRequest, res: Response) {
-  try {
-    res.json(await bookingService.listUserBookings(req.user!.id));
-  } catch (err) {
-    console.log(err);
-    res.json([]);
-  }
+  res.json(await bookingService.listUserBookings(req.user!.id));
 }
 
 export async function listHolds(req: AuthRequest, res: Response) {
-  try {
-    res.json(await bookingService.listUserHolds(req.user!.id));
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
+  res.json(await bookingService.listUserHolds(req.user!.id));
 }
 
 export async function listBlockedSeats(req: AuthRequest, res: Response) {
-  try {
-    const eventId = req.query.eventId === undefined ? undefined : Number(req.query.eventId);
-    if (eventId !== undefined && !Number.isInteger(eventId)) {
-      return res.status(400).json({ error: 'eventId must be a number' });
+  let eventId: number | undefined;
+  if (req.query.eventId !== undefined) {
+    const parsed = toPositiveInt(req.query.eventId);
+    if (parsed === null) {
+      throw new AppError(400, 'eventId must be a positive integer');
     }
-
-    res.json(await bookingService.listBlockedSeats(req.user!.id, eventId));
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    eventId = parsed;
   }
+
+  res.json(await bookingService.listBlockedSeats(req.user!.id, eventId));
 }
 
 export async function cancel(req: AuthRequest, res: Response) {
-  await bookingService.cancelBooking(parseInt(req.params.id));
+  await bookingService.cancelBooking(parseBookingId(req));
 
   res.json({ success: true });
 }

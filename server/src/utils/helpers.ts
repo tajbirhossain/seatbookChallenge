@@ -15,6 +15,21 @@ export function isSeatBookable(seat: Seat & { bookings: Booking[] }, event: Even
   return seat.bookings.length === 0;
 }
 
+// Strictly parses a positive 32-bit integer id from a number or a digits-only string.
+// Returns null for anything else (NaN, floats, booleans, arrays, "12abc", out of range).
+export function toPositiveInt(value: unknown): number | null {
+  let n: number;
+  if (typeof value === 'number') {
+    n = value;
+  } else if (typeof value === 'string' && /^\d+$/.test(value)) {
+    n = Number(value);
+  } else {
+    return null;
+  }
+
+  return Number.isInteger(n) && n > 0 && n <= 2147483647 ? n : null;
+}
+
 export function slugify(text: string): string {
   return text
     .toLowerCase()

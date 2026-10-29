@@ -3,6 +3,7 @@ import cors from 'cors';
 import authRoutes from './modules/auth/auth.routes';
 import eventRoutes from './modules/events/events.routes';
 import bookingRoutes from './modules/bookings/bookings.routes';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 const app = express();
 
@@ -16,5 +17,8 @@ app.get('/health', (req, res) => {
 app.use('/auth', authRoutes);
 app.use('/events', eventRoutes);
 app.use('/bookings', bookingRoutes);
+
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 export default app;

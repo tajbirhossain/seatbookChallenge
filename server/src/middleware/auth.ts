@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { AppError } from '../lib/errors';
 import { verifyToken } from '../lib/jwt';
 
 export interface AuthUser {
@@ -14,14 +15,14 @@ export interface AuthRequest extends Request {
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   if (!header) {
-    return res.status(401).json({ error: 'Not logged in' });
+    return next(new AppError(401, 'Not logged in'));
   }
 
   const token = header.replace('Bearer ', '');
   try {
     req.user = verifyToken(token);
-    next();
   } catch (err) {
-    return res.status(401).json({ message: 'Invalid token' });
+    return next(new AppError(401, 'Invalid token'));
   }
+  next();
 }

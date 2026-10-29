@@ -67,4 +67,6 @@ You need a Postgres running at the `DATABASE_URL` in `server/.env`, and a `JWT_S
 
 A held seat shows as unavailable to everyone else until the hold is confirmed or its 10 minutes run out. `POST /bookings` still books a seat directly, and confirms your own hold on that seat if you have one.
 
+Every error response is JSON shaped `{ "error": "message" }`: 400 for malformed input, 401 not logged in, 403 not allowed, 404 not found, 409 conflict, 503 when the database is unreachable and 500 for anything unexpected (details are logged on the server, never sent).
+
 Send the token as `Authorization: Bearer <token>`.

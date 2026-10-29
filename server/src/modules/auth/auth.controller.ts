@@ -1,29 +1,29 @@
 import { Request, Response } from 'express';
+import { AppError } from '../../lib/errors';
 import * as authService from './auth.service';
-import { validateRegister } from './auth.validation';
+import { validateLogin, validateRegister } from './auth.validation';
 
 export async function register(req: Request, res: Response) {
-  try {
-    const invalid = validateRegister(req.body);
-    if (invalid) {
-      return res.status(400).json({ error: invalid });
-    }
-
-    const { email, password, name, role } = req.body;
-    const result = await authService.register({ email, password, name, role });
-
-    res.status(201).json(result);
-  } catch (err: any) {
-    res.status(400).json({ error: err.message });
+  const invalid = validateRegister(req.body);
+  if (invalid) {
+    throw new AppError(400, invalid);
   }
+
+  const { email, password, name, role } = req.body;
+  const result = await authService.register({ email, password, name, role });
+
+  res.status(201).json(result);
 }
 
 export async function login(req: Request, res: Response) {
-  const { email, password } = req.body;
+  const invalid = validateLogin(req.body);
+  if (invalid) {
+    throw new AppError(400, invalid);
+  }
 
-  const result = await authService.login(email, password);
+  const result = await authService.login(req.body.email, req.body.password);
   if (!result) {
-    return res.status(401).json({ message: 'Invalid credentials' });
+    throw new AppError(401, 'Invalid credentials');
   }
 
   res.json(result);

@@ -1,5 +1,7 @@
 import bcrypt from 'bcryptjs';
+import { Prisma } from '@prisma/client';
 import prisma from '../../lib/prisma';
+import { AppError } from '../../lib/errors';
 import { signToken } from '../../lib/jwt';
 
 function toAuthResponse(user: { id: number; email: string; name: string; role: 'ORGANIZER' | 'ATTENDEE' }) {
@@ -10,16 +12,24 @@ function toAuthResponse(user: { id: number; email: string; name: string; role: '
 
 export async function register(input: { email: string; password: string; name: string; role?: string }) {
   const passwordHash = await bcrypt.hash(input.password, 10);
-  const user = await prisma.user.create({
-    data: {
-      email: input.email,
-      name: input.name,
-      passwordHash,
-      role: input.role === 'ORGANIZER' ? 'ORGANIZER' : 'ATTENDEE',
-    },
-  });
 
-  return toAuthResponse(user);
+  try {
+    const user = await prisma.user.create({
+      data: {
+        email: input.email,
+        name: input.name,
+        passwordHash,
+        role: input.role === 'ORGANIZER' ? 'ORGANIZER' : 'ATTENDEE',
+      },
+    });
+
+    return toAuthResponse(user);
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      throw new AppError(409, 'Email already registered');
+    }
+    throw err;
+  }
 }
 
 // Returns null when the credentials are wrong.
